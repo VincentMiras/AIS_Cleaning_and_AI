@@ -5,7 +5,7 @@ import numpy as np
 
 cols_to_read = ['MMSI', 'Time', 'Longitude', 'Latitude', 'COG', 'SOG']
 directory='D:\Vincent\SPAR_AIS_DATA'
-save_directory='D:\Vincent\Cleandata_nbp_mindist_mieux'
+save_directory='D:\Vincent\Cleandata_valid_with_parquet'
 
 def process_csv_file(csv_files):
     df = pd.read_csv(csv_files, usecols=cols_to_read)
@@ -24,6 +24,7 @@ def process_csv_file(csv_files):
     mmsi_counts = df['MMSI'].value_counts()
     mmsi_to_keep = mmsi_counts[mmsi_counts >= 10].index
     df_filtered = df[df['MMSI'].isin(mmsi_to_keep)]
+    removed_data = df[~df['MMSI'].isin(mmsi_to_keep)]
     
     to_remove_loin = []
     for mmsi in df_filtered['MMSI'].unique():
@@ -37,30 +38,42 @@ def process_csv_file(csv_files):
         indices_to_remove_loin = np.where(min_distances > 0.5)[0]
         to_remove_loin.extend(mmsi_data.index[indices_to_remove_loin])
     
+    removed_data = pd.concat([removed_data, df_filtered.loc[to_remove_loin]])
     df_filtered = df_filtered.drop(to_remove_loin)
     
     to_remove = []
     for mmsi in df_filtered['MMSI'].unique():
         mmsi_data = df_filtered[df_filtered['MMSI'] == mmsi]
-        if mmsi_data['Latitude'].max() - mmsi_data['Latitude'].min() < 0.1 and mmsi_data['Longitude'].max() - mmsi_data['Longitude'].min() < 0.1:
+        if mmsi_data['Latitude'].diff().max() < 0.1 and mmsi_data['Longitude'].diff().max() < 0.1:
             to_remove.extend(mmsi_data.index)
+            
+    removed_data = pd.concat([removed_data, df_filtered.loc[to_remove]])
+    removed_data.sort_values(by=['MMSI','Time'], inplace=True)
     
     df_filtered = df_filtered.drop(to_remove)
-    
     df_filtered.sort_values(by=['MMSI','Time'], inplace=True)
     
-    return df_filtered
+    return df_filtered,removed_data
     
-def process_files_in_directory(directory):
+def process_files_in_directory(directory,save_directory):
+    csv_save_directory=os.path.join(save_directory,'Saved_csv')
+    parquet_save_directory=os.path.join(save_directory,'Saved_parquet')
+    csv_remove_directory=os.path.join(save_directory,'Removed_csv')
     for year in os.listdir(directory):
         file_year = os.path.join(directory, year)
-        save_year = os.path.join(save_directory, year)
+        parquet_year = os.path.join(parquet_save_directory, year)
+        save_year = os.path.join(csv_save_directory, year)
+        removed_year = os.path.join(csv_remove_directory, year)
         if not os.path.isdir(file_year):
             continue
         for month in os.listdir(file_year):
             file_month = os.path.join(file_year, month)
             save_month = os.path.join(save_year, month)
+            parquet_month = os.path.join(parquet_year, month)
+            removed_month = os.path.join(removed_year, month)
             os.makedirs(save_month, exist_ok=True)
+            os.makedirs(parquet_month, exist_ok=True)
+            os.makedirs(removed_month, exist_ok=True)
             if not os.path.isdir(file_month):
                 continue
             for day in os.listdir(file_month):
@@ -72,9 +85,12 @@ def process_files_in_directory(directory):
                         for extracted_file_name in os.listdir(temp_dir):
                             extracted_file_path = os.path.join(temp_dir, extracted_file_name)
                             save_file = os.path.join(save_month, extracted_file_name)
-                            df = process_csv_file(extracted_file_path)
-                            print(save_file)
+                            save_parquet = os.path.join(parquet_month, extracted_file_name+'.parquet')
+                            removed_file = os.path.join(removed_month, extracted_file_name)
+                            df,removed_data = process_csv_file(extracted_file_path)
                             df.to_csv(save_file, index=False)
+                            df.to_parquet(save_parquet, index=False)
+                            removed_data.to_csv(removed_file, index=False)
                             os.remove(extracted_file_path)
                     os.rmdir(temp_dir)
                 
