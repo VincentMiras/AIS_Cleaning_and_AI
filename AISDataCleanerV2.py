@@ -5,17 +5,14 @@ import numpy as np
 import pyproj
 from scipy.spatial.distance import cdist
 import interpol_lin
-import interpolation
 
 transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4087")
 
 cols_to_read = ['MMSI', 'Time', 'Longitude', 'Latitude','SOG','COG']
-directory = r'D:\Vincent\Cleandata'
+directory = r'D:\Vincent\datadl\backfill_2012-2022'
 save_directory = r'D:\Vincent\Cleandata_valid_transform'
 directory_lin = 'D:\\Vincent\\Cleandata_valid_transform\\transform_csv'
 save_directory_lin = 'D:\\Vincent\\interpol_data_transf_lin'
-directory_spl= 'D:\\Vincent\\Cleandata_valid_transform\\transform_csv'
-save_directory_spl = 'D:\\Vincent\\interpol_data_trans'
 
 
 def process_csv_file(csv_files):
@@ -41,6 +38,14 @@ def process_csv_file(csv_files):
     mmsi_to_keep = mmsi_counts[mmsi_counts >= 10].index
     df_filtered = df[df['MMSI'].isin(mmsi_to_keep)]
     removed_data = df[~df['MMSI'].isin(mmsi_to_keep)]
+    
+    df['mmsi_str'] = df['mmsi'].astype(str)
+    df_filtered = df[df['mmsi_str'].str.len() == 8]
+    df_filtered = df_filtered.drop(columns=['mmsi_str'])            
+    
+    # Transform coordinates using pyproj.Transformer
+    transformed_coords = transformer.transform(df_filtered['Longitude'].values, df_filtered['Latitude'].values)
+    df_filtered = df_filtered.assign(Transformed_Latitude=transformed_coords[1], Transformed_Longitude=transformed_coords[0])
 
     # Remove distant points based on distance threshold
     to_remove_loin = []
@@ -74,10 +79,7 @@ def process_csv_file(csv_files):
     df_filtered = df_filtered.reset_index(drop=True)
     df_filtered.sort_values(by=['MMSI', 'Time'], inplace=True)
 
-    # Transform coordinates using pyproj.Transformer
-    transformed_coords = transformer.transform(df_filtered['Longitude'].values, df_filtered['Latitude'].values)
-    df_filtered['Transformed_Latitude'] = transformed_coords[1]
-    df_filtered['Transformed_Longitude'] = transformed_coords[0]
+    
 
     return df_filtered, removed_data
     
@@ -133,6 +135,5 @@ def process_files_in_directory(directory, save_directory):
                     os.rmdir(temp_dir)
                 
 
-# process_files_in_directory(directory, save_directory)
+process_files_in_directory(directory, save_directory)
 interpol_lin.process_files_in_directory(directory_lin, save_directory_lin)
-interpolation.process_files_in_directory(directory_spl, save_directory_spl)
