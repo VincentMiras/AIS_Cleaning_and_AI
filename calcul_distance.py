@@ -1,0 +1,112 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Aug  1 10:13:36 2024
+
+@author: slizo080
+"""
+
+
+
+import os
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Fonction pour calculer la distance de Haversine
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371  # Rayon de la Terre en kilomètres
+    phi1 = np.radians(lat1)
+    phi2 = np.radians(lat2)
+    delta_phi = np.radians(lat2 - lat1)
+    delta_lambda = np.radians(lon2 - lon1)
+    
+    a = np.sin(delta_phi / 2) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda / 2) ** 2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    
+    return R * c
+
+# Fonction pour traiter les fichiers de base et de prédiction
+def process_files(base_file, prediction_file):
+    print(f"Traitement des fichiers: {base_file} et {prediction_file}")
+    # Lire les fichiers de base et de prédiction
+    base_data = pd.read_csv(base_file)
+    prediction_data = pd.read_csv(prediction_file)
+    
+    # Vérifier que les fichiers ont les colonnes nécessaires
+    if 'Latitude' not in base_data.columns or 'Longitude' not in base_data.columns:
+        print(f"Erreur : Le fichier de base {base_file} ne contient pas les colonnes nécessaires.")
+        return
+    
+    if 'Predicted_Latitude' not in prediction_data.columns or 'Predicted_Longitude' not in prediction_data.columns:
+        print(f"Erreur : Le fichier de prédiction {prediction_file} ne contient pas les colonnes nécessaires.")
+        return
+    
+    # Calculer les distances
+    distances = haversine(base_data['Latitude'], base_data['Longitude'],
+                          prediction_data['Predicted_Latitude'], prediction_data['Predicted_Longitude'])
+    
+    prediction_data['Distance'] = distances
+    
+    # Filtrer les points où la distance est supérieure à 1 km
+    significant_distances = prediction_data[prediction_data['Distance'] > 50]
+    
+    # Tracer les points pour chaque bateau avec distance > 1 km
+    for mmsi in significant_distances['MMSI'].unique():
+        ship_data = significant_distances[significant_distances['MMSI'] == mmsi]
+        
+        plt.figure()
+        plt.scatter(base_data.loc[ship_data.index, 'Longitude'], base_data.loc[ship_data.index, 'Latitude'], color='blue', label='Réel')
+        plt.scatter(ship_data['Predicted_Longitude'], ship_data['Predicted_Latitude'], color='red', label='Prédiction')
+        
+        # Annoter les points avec la distance
+        for idx, row in ship_data.iterrows():
+            plt.annotate(f"{row['Distance']:.2f} km", (row['Predicted_Longitude'], row['Predicted_Latitude']), textcoords="offset points", xytext=(0,10), ha='center', fontsize=8)
+        
+        plt.xlabel('Longitude')
+        plt.ylabel('Latitude')
+        plt.title(f'MMSI: {mmsi} - Fichier: {os.path.basename(base_file)} - Distance: {row["Distance"]:.2f} km')
+        plt.legend()
+        plt.show()
+    
+    # Enregistrer le fichier de prédiction avec la nouvelle colonne
+    prediction_data.to_csv(prediction_file, index=False)
+    print(f"Le fichier {prediction_file} a été mis à jour avec la colonne distance.")
+
+# Chemins des répertoires de base et de prédiction
+base_dir = './interpol_data_lin/interpol_data_lin/'
+prediction_dir = './predictions/'
+
+# Liste des années à traiter
+years = [2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024]
+
+
+# Parcourir les fichiers de base et de prédiction pour chaque année et chaque mois
+for year in years:
+    for month in range(1, 13):
+        month_str = f"{month:02d}"
+        base_month_dir = os.path.join(base_dir, str(year),month_str)
+        prediction_month_dir = os.path.join(prediction_dir, str(year), month_str)
+        
+        print(f"Vérification des répertoires: {base_month_dir} et {prediction_month_dir}")
+        
+        if not os.path.exists(base_month_dir):
+            print(f"Erreur : Le répertoire de base {base_month_dir} n'existe pas.")
+            continue
+
+        if not os.path.exists(prediction_month_dir):
+            print(f"Erreur : Le répertoire de prédiction {prediction_month_dir} n'existe pas.")
+            continue
+        
+        for root, dirs, files in os.walk(prediction_month_dir):
+            for file in files:
+                if file.endswith('.csv'):
+                    base_file_path = os.path.join(base_month_dir, file.replace('prediction_', ''))
+                    prediction_file_path = os.path.join(root, file)
+                    
+                    # Vérifier que le fichier de base existe
+                    if os.path.exists(base_file_path):
+                        # Appeler la fonction pour traiter les fichiers
+                        process_files(base_file_path, prediction_file_path)
+                    else:
+                        print(f"Erreur : Le fichier de base {base_file_path} n'existe pas.")
+                        
