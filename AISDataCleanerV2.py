@@ -37,11 +37,7 @@ def process_csv_file(csv_files):
     mmsi_counts = df['MMSI'].value_counts()
     mmsi_to_keep = mmsi_counts[mmsi_counts >= 10].index
     df_filtered = df[df['MMSI'].isin(mmsi_to_keep)]
-    removed_data = df[~df['MMSI'].isin(mmsi_to_keep)]
-    
-    df['mmsi_str'] = df['mmsi'].astype(str)
-    df_filtered = df[df['mmsi_str'].str.len() == 8]
-    df_filtered = df_filtered.drop(columns=['mmsi_str'])            
+    removed_data = df[~df['MMSI'].isin(mmsi_to_keep)]         
     
     # Transform coordinates using pyproj.Transformer
     transformed_coords = transformer.transform(df_filtered['Longitude'].values, df_filtered['Latitude'].values)
