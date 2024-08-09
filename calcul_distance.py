@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Aug  1 10:13:36 2024
+Created on Wed Aug  7 11:16:52 2024
 
 @author: slizo080
 """
-
-
 
 import os
 import pandas as pd
@@ -47,44 +45,28 @@ def process_files(base_file, prediction_file):
     
     prediction_data['Distance'] = distances
     
-    # Filtrer les points où la distance est supérieure à 1 km
-    significant_distances = prediction_data[prediction_data['Distance'] > 50]
+    # Calculer la moyenne et la variance des distances pour chaque MMSI
+    mmsi_groups = prediction_data.groupby('MMSI')
+    prediction_data['Moyenne_par_bateau'] = mmsi_groups['Distance'].transform('mean')
+    prediction_data['Variance_par_bateau'] = mmsi_groups['Distance'].transform('var')
     
-    # Tracer les points pour chaque bateau avec distance > 1 km
-    for mmsi in significant_distances['MMSI'].unique():
-        ship_data = significant_distances[significant_distances['MMSI'] == mmsi]
-        
-        plt.figure()
-        plt.scatter(base_data.loc[ship_data.index, 'Longitude'], base_data.loc[ship_data.index, 'Latitude'], color='blue', label='Réel')
-        plt.scatter(ship_data['Predicted_Longitude'], ship_data['Predicted_Latitude'], color='red', label='Prédiction')
-        
-        # Annoter les points avec la distance
-        for idx, row in ship_data.iterrows():
-            plt.annotate(f"{row['Distance']:.2f} km", (row['Predicted_Longitude'], row['Predicted_Latitude']), textcoords="offset points", xytext=(0,10), ha='center', fontsize=8)
-        
-        plt.xlabel('Longitude')
-        plt.ylabel('Latitude')
-        plt.title(f'MMSI: {mmsi} - Fichier: {os.path.basename(base_file)} - Distance: {row["Distance"]:.2f} km')
-        plt.legend()
-        plt.show()
-    
-    # Enregistrer le fichier de prédiction avec la nouvelle colonne
+    # Enregistrer le fichier de prédiction avec les nouvelles colonnes
     prediction_data.to_csv(prediction_file, index=False)
-    print(f"Le fichier {prediction_file} a été mis à jour avec la colonne distance.")
+    print(f"Le fichier {prediction_file} a été mis à jour avec les colonnes Moyenne_par_bateau et Variance_par_bateau.")
 
 # Chemins des répertoires de base et de prédiction
 base_dir = './interpol_data_lin/interpol_data_lin/'
 prediction_dir = './predictions/'
 
 # Liste des années à traiter
-years = [2012,2013,2014,2015,2016,2017,2018,2019,2020,2021,2022,2023,2024]
-
+years = [2024]
+#2012,2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024
 
 # Parcourir les fichiers de base et de prédiction pour chaque année et chaque mois
 for year in years:
-    for month in range(1, 13):
+    for month in range(1, 12):  # Si vous souhaitez traiter uniquement jusqu'à novembre
         month_str = f"{month:02d}"
-        base_month_dir = os.path.join(base_dir, str(year),month_str)
+        base_month_dir = os.path.join(base_dir, str(year), month_str)
         prediction_month_dir = os.path.join(prediction_dir, str(year), month_str)
         
         print(f"Vérification des répertoires: {base_month_dir} et {prediction_month_dir}")
@@ -109,4 +91,3 @@ for year in years:
                         process_files(base_file_path, prediction_file_path)
                     else:
                         print(f"Erreur : Le fichier de base {base_file_path} n'existe pas.")
-                        
