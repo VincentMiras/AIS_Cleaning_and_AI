@@ -216,34 +216,34 @@ def predict_and_save(data_file, output_dir, plot_limit=10):
         
         plot_count += 1
     
-#     # Enregistrer les prédictions dans un fichier CSV
-#     output_file = os.path.join(output_dir, f'prediction_{os.path.basename(data_file)}')
+    # Enregistrer les prédictions dans un fichier CSV
+    output_file = os.path.join(output_dir, f'prediction_{os.path.basename(data_file)}')
     
-#     # Ajouter les colonnes pour les prédictions
-#     data['Predicted_Latitude'] = np.nan
-#     data['Predicted_Longitude'] = np.nan
+    # Ajouter les colonnes pour les prédictions
+    data['Predicted_Latitude'] = np.nan
+    data['Predicted_Longitude'] = np.nan
     
-#     for trajectory, scaler, mmsi, indices in trajectories:
-#         # Préparer les données pour la prédiction
-#         X_test_mmsi = trajectory[:-1].reshape(-1, 1, 3)
+    for trajectory, scaler, mmsi, indices in trajectories:
+        # Préparer les données pour la prédiction
+        X_test_mmsi = trajectory[:-1].reshape(-1, 1, 3)
         
-#         # Prédire les positions
-#         predicted_positions = model.predict(X_test_mmsi)
-#         predicted_positions = scaler.inverse_transform(predicted_positions)
+        # Prédire les positions
+        predicted_positions = model.predict(X_test_mmsi)
+        predicted_positions = scaler.inverse_transform(predicted_positions)
         
-#         # Assigner les prédictions au DataFrame
-#         for i, idx in enumerate(indices):
-#             if i < len(predicted_positions):
-#                 data.loc[idx, 'Predicted_Latitude'] = predicted_positions[i, 0]
-#                 data.loc[idx, 'Predicted_Longitude'] = predicted_positions[i, 1]
+        # Assigner les prédictions au DataFrame
+        for i, idx in enumerate(indices):
+            if i < len(predicted_positions):
+                data.loc[idx, 'Predicted_Latitude'] = predicted_positions[i, 0]
+                data.loc[idx, 'Predicted_Longitude'] = predicted_positions[i, 1]
 
-#     data.to_csv(output_file, index=False)
-#     # Sélectionner uniquement les colonnes souhaitées
-#     result = data[['Time', 'MMSI', 'Predicted_Latitude', 'Predicted_Longitude']]
+    data.to_csv(output_file, index=False)
+    # Sélectionner uniquement les colonnes souhaitées
+    result = data[['Time', 'MMSI', 'Predicted_Latitude', 'Predicted_Longitude']]
     
-#     result.to_csv(output_file, index=False)
+    result.to_csv(output_file, index=False)
 
-# Appel de la fonction pour chaque fichier de prédiction
+
 for data_dir, output_dir in zip(data_dirs[1:], output_dirs):
     remaining_csv_files = [f for f in os.listdir(data_dir) if f.endswith('.csv')]
     for csv_file in remaining_csv_files:
