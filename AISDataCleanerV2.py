@@ -5,6 +5,19 @@ import numpy as np
 import pyproj
 from scipy.spatial.distance import cdist
 import interpol_lin
+from math import radians, sin, cos, sqrt, atan2
+
+def haversine(lat1, lon1, lat2, lon2):
+    # Convert latitude and longitude from degrees to radians
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    
+    # Haversine formula
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    r = 6371  # Radius of Earth in kilometers
+    return r * c
 
 transformer = pyproj.Transformer.from_crs("EPSG:4326", "EPSG:4087")
 
@@ -48,8 +61,17 @@ def process_csv_file(csv_files):
     for mmsi in df_filtered['MMSI'].unique():
         mmsi_data = df_filtered[df_filtered['MMSI'] == mmsi]
         
-        # Utilisation de cdist pour calculer les distances entre toutes les paires de points
-        distances = cdist(mmsi_data[['Latitude', 'Longitude']], mmsi_data[['Latitude', 'Longitude']], metric='euclidean')
+        # Compute Haversine distances between all pairs of points
+        distances = np.zeros((len(mmsi_data), len(mmsi_data)))
+        for i in range(len(mmsi_data)):
+            for j in range(len(mmsi_data)):
+                if i != j:
+                    distances[i, j] = haversine(
+                        mmsi_data.iloc[i]['Latitude'],
+                        mmsi_data.iloc[i]['Longitude'],
+                        mmsi_data.iloc[j]['Latitude'],
+                        mmsi_data.iloc[j]['Longitude']
+                    )
         
         np.fill_diagonal(distances, np.inf)
         
@@ -61,16 +83,38 @@ def process_csv_file(csv_files):
     df_filtered = df_filtered.drop(to_remove_loin)
 
     # Remove stationary points based on proximity threshold
-    to_remove = []
+    to_remove_stationary = []
+    proximity_threshold_km = 0.1  # Define the proximity threshold in kilometers
+
     for mmsi in df_filtered['MMSI'].unique():
         mmsi_data = df_filtered[df_filtered['MMSI'] == mmsi]
-        if mmsi_data['Latitude'].diff().max() < 0.1 and mmsi_data['Longitude'].diff().max() < 0.1:
-            to_remove.extend(mmsi_data.index)
+        if len(mmsi_data) < 2:
+            continue
+        
+        # Compute Haversine distances between consecutive points
+        for i in range(len(mmsi_data) - 1):
+            if haversine(
+                mmsi_data.iloc[i]['Latitude'],
+                mmsi_data.iloc[i]['Longitude'],
+                mmsi_data.iloc[i + 1]['Latitude'],
+                mmsi_data.iloc[i + 1]['Longitude']
+            ) < proximity_threshold_km:
+                to_remove_stationary.append(mmsi_data.index[i])
+                
+        # Handle the last point if it's stationary with the previous one
+        if len(mmsi_data) > 1:
+            if haversine(
+                mmsi_data.iloc[-1]['Latitude'],
+                mmsi_data.iloc[-1]['Longitude'],
+                mmsi_data.iloc[-2]['Latitude'],
+                mmsi_data.iloc[-2]['Longitude']
+            ) < proximity_threshold_km:
+                to_remove_stationary.append(mmsi_data.index[-1])
 
-    removed_data = pd.concat([removed_data, df_filtered.loc[to_remove]])
+    removed_data = pd.concat([removed_data, df_filtered.loc[to_remove_stationary]])
     removed_data.sort_values(by=['MMSI', 'Time'], inplace=True)
     
-    df_filtered = df_filtered.drop(to_remove)
+    df_filtered = df_filtered.drop(to_remove_stationary)
     df_filtered = df_filtered.drop_duplicates(subset=['MMSI', 'Time'])
     df_filtered = df_filtered.reset_index(drop=True)
     df_filtered.sort_values(by=['MMSI', 'Time'], inplace=True)
